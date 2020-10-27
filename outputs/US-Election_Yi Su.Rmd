@@ -1,0 +1,335 @@
+---
+title: "TBD"
+subtitle: "TBD"
+author: "Yi Su"
+thanks: "Code and data are available at: LINK."
+date: "`r format(Sys.time(), '%d %B %Y')`"
+abstract: |
+  | First sentence. Second sentence. Third sentence. Fourth sentence. 
+output:
+  bookdown::pdf_document2:
+toc: FALSE
+---
+
+```{r setup, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}
+library(knitr)
+library(broom)
+library(skimr)
+library(naniar)
+library(tidyverse)
+library(tidybayes)
+library(ggplot2)
+library(brms)
+library(statebins)
+library(tools)
+
+sample_data <- read_csv("/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/inputs/data/reduced_data.csv")
+ps_data <- read_csv("/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/inputs/data/reduced_data_post_strat_1.csv")
+```
+
+
+```{r survey data, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}
+#we are only interested in whether they vote for Trump or Biden, so we would like to treat all observations saying "I will not vote" and "I am not sure" as missing values. This reduces the sample size to 4753 observations of individuals.
+sample_data <- sample_data%>%
+  replace_with_na(replace = list(
+    vote_2020 = c("I am not sure/don't know", "I would not vote", "Someone else")))%>%
+  na.omit()
+ps_data <- ps_data%>%na.omit()
+sample_data$Who <- ifelse(sample_data$vote_2020 == "Donald Trump", 1, 0)
+#Construct binary dummy variable, 1 for vote for Trump and 0 for vote for Biden
+#We are interested in regress who to vote on age, household income level, race, and state in US.
+
+# For the codes below, I am aware that these might be the more "ugly" or wordy approach, but this is simply the easiest to interpret and modified if needed later.
+
+
+#first create household income levels 
+sample_data <- sample_data%>%
+  mutate(incgrp = recode(household_income,
+                         'Less than $14,999' = "Less than $35,000",
+                         '$15,000 to $19,999'= "Less than $35,000",
+                         '$20,000 to $24,999'= "Less than $35,000",
+                         '$25,000 to $29,999'= "Less than $35,000",
+                         '$30,000 to $34,999'= "Less than $35,000",
+                         '$35,000 to $39,999'= "$35,000 to $69,999",
+                         '$40,000 to $44,999'= "$35,000 to $69,999",
+                         '$45,000 to $49,999'= "$35,000 to $69,999",
+                         '$50,000 to $54,999'= "$35,000 to $69,999",
+                         '$55,000 to $59,999'= "$35,000 to $69,999",
+                         '$60,000 to $64,999'= "$35,000 to $69,999",
+                         '$65,000 to $69,999'= "$35,000 to $69,999",
+                         '$70,000 to $74,999'= "$70,000 to $99,999",
+                         '$75,000 to $79,999'= "$70,000 to $99,999",
+                         '$80,000 to $84,999'= "$70,000 to $99,999",
+                         '$85,000 to $89,999'= "$70,000 to $99,999",
+                         '$90,000 to $94,999'= "$70,000 to $99,999",
+                         '$95,000 to $99,999'= "$70,000 to $99,999",
+                         '$100,000 to $124,999'= "$100,000 to $174,999",
+                         '$125,000 to $149,999'= "$100,000 to $174,999",
+                         '$150,000 to $174,999'= "$100,000 to $174,999",
+                         '$175,000 to $199,999'= "$175,000 to $249,999",
+                         '$200,000 to $249,999'= "$175,000 to $249,999",
+                         '$250,000 and above'= "More than $250,000"))
+
+#Also modify race to get inline with post-strat. dataset
+sample_data <- sample_data%>%
+  mutate(race = recode(race_ethnicity,
+                       'Asian (Chinese)' = "Chinese or Japanese",
+                       'Asian (Japanese)'= "Chinese or Japanese",
+                       'Asian (Asian Indian)'= "Other Asian or Pacific Islander",
+                       'Asian (Filipino)'= "Other Asian or Pacific Islander",
+                       'Asian (Korean)'= "Other Asian or Pacific Islander",
+                       'Asian (Vietnamese)'= "Other Asian or Pacific Islander",
+                       'Asian (Other)'= "Other Asian or Pacific Islander",
+                       'Pacific Islander (Native Hawaiian)'= "Other Asian or Pacific Islander",
+                       'Pacific Islander (Guamanian)'= "Other Asian or Pacific Islander",
+                       'Pacific Islander (Samoan)'= "Other Asian or Pacific Islander",
+                       'Pacific Islander (Other)'= "Other Asian or Pacific Islander",
+                       'Black, or African American' = "Black/African American/Negro",
+                       'White' = 'White',
+                       'American Indian or Alaska Native' = "American Indian or Alaska Native",
+                       'Some other race' = "Some other race"))
+#and we'd also like to group ages into 8 decades
+sample_data <- sample_data %>% 
+  mutate(agegrp = case_when(age < 20 ~ "Under 20",
+                            age >= 20  & age < 30 ~ "Between 20 to 30",
+                            age >= 30  & age < 40 ~ "Between 30 to 40",
+                            age >= 40  & age < 50 ~ "Between 40 to 50",
+                            age >= 50  & age < 60 ~ "Between 50 to 60",
+                            age >= 60  & age < 70 ~ "Between 60 to 70",
+                            age >= 70  & age < 80 ~ "Between 70 to 80",
+                            age >= 80  ~ "Above 80"))
+#These code on state names are enlighten by Alexander Rohan's Piazza answer    
+state_names <- tibble(statefull = state.name, state = state.abb)   
+sample_data <-sample_data%>%left_join(state_names)         
+```
+
+```{r poststrat data, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}}
+ps_data <- ps_data%>%
+  replace_with_na(replace = list(hhincome = 9999999))%>%
+  na.omit()
+#To capitalize the initial character of each state
+simpleCap <- function(x) {
+  s <- strsplit(x, " ")[[1]]
+  paste(toupper(substring(s, 1,1)), substring(s, 2),
+      sep="", collapse=" ")
+}
+ps_data$statefull <- sapply(ps_data$stateicp, simpleCap)
+ps_data <- ps_data%>%
+  mutate(statefull = recode(statefull,
+   'District Of Columbia' = "Washington"
+  ))
+#also create income levels since the post-strat. household income are numeric
+ps_data <- ps_data%>%
+  mutate(incgrp = case_when(
+    hhincome < 35000 ~ "Less than $35,000",
+    hhincome >= 35000 & hhincome < 70000 ~ "$35,000 to $69,999",
+    hhincome >= 70000 & hhincome < 100000 ~ "$70,000 to $99,999",
+    hhincome >= 100000 & hhincome < 175000 ~ "$100,000 to $174,999",
+    hhincome >= 175000 & hhincome < 250000 ~ "$175,000 to $249,999",
+    hhincome >= 250000 ~ "More than $250,000"
+  ))
+#similarly, create age groups accordingly to the survey sample dataset
+ps_data <- ps_data %>% 
+  mutate(agegrp = case_when(age < 20 ~ "Under 20",
+                            age >= 20  & age < 30 ~ "Between 20 to 30",
+                            age >= 30  & age < 40 ~ "Between 30 to 40",
+                            age >= 40  & age < 50 ~ "Between 40 to 50",
+                            age >= 50  & age < 60 ~ "Between 50 to 60",
+                            age >= 60  & age < 70 ~ "Between 60 to 70",
+                            age >= 70  & age < 80 ~ "Between 70 to 80",
+                            age >= 80  ~ "Above 80"))
+#create race groups
+ps_data <- ps_data%>%
+  mutate(race = recode(race,
+                       'chinese' = "Chinese or Japanese",
+                       'japanese'= "Chinese or Japanese",
+                       'other asian or pacific islander' = "Other Asian or Pacific Islander",
+                       
+                       'black/african american/negro' = "Black/African American/Negro",
+                       'white' = 'White',
+                       'american indian or alaska native' = "American Indian or Alaska Native",
+                       'other race, nec'= "Some other race",
+                       'two major races'= "Some other race",
+                       'three or more major races'= "Some other race"))
+#then we add proportions to the three group level variables we choose, that are race, age, and states
+counts <- ps_data%>%count(agegrp, race, statefull,incgrp)
+counts
+agegrp_p <- counts %>% 
+  group_by(agegrp) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  ungroup()
+state_p <- counts %>% 
+  group_by(statefull) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  ungroup()
+race_p <- counts %>%
+  group_by(race) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  ungroup()
+incgrp_p <- counts %>% 
+  group_by(incgrp) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  ungroup()
+```
+
+# Introduction
+
+
+
+
+# Data
+
+
+# Model
+```{r model, echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
+#due to the ability of my laptop, if I try adding more layers to other variables my laptop would fail to do so.....So I decided to only add layers on age group, states, and race.
+model3 <- brm(Who ~ (1|agegrp) + (1|incgrp) + (1|statefull) + (1|race), 
+            data = sample_data, 
+            family = bernoulli(),
+            seed = 6431,
+            silent = TRUE,
+            refresh = 0,
+            file = "/Users/jordans2000/Desktop/STA304/PS4-Election/Forecast_US_Election_YS6431/outputs/model/model3")
+summary(model3)
+mcmc_plot(model3, type = "trace")+
+  labs(title = "Figure 3")
+# set seed to the last 4 digits of my student number
+```
+
+\begin{equation}
+Pr(\theta | y) = \frac{Pr(y | \theta) Pr(\theta)}{Pr(y)}  (\#eq:bayes)
+\end{equation}
+
+Equation \@ref(eq:bayes) seems useful, eh?
+
+Here's a dumb example of how to use some references: In paper we run our analysis in `R` [@citeR]. We also use the `tidyverse` which was written by @thereferencecanbewhatever If we were interested in baseball data then @citeLahman could be useful. 
+
+
+# Results
+```{r predictions, echo = FALSE, message = FALSE}
+pre_age <- model3 %>%
+  add_predicted_draws(newdata=agegrp_p,
+                      allow_new_levels=TRUE) %>%
+  #create predictions
+  rename(vote_predict = .prediction) %>% 
+  mutate(vote_predict_p = vote_predict*prop) %>% 
+  #weight prediction according to proportion of the var in post-strat dataset
+  group_by(agegrp, .draw) %>% 
+  summarise(vote_predict = sum(vote_predict_p)) %>% 
+  #make vote predict as the sum of all proportion-wise predict
+  group_by(agegrp) %>% 
+  summarise(mean = mean(vote_predict), 
+            lower = quantile(vote_predict, 0.025), 
+            upper = quantile(vote_predict, 0.975))
+  #return the mean of predict for each level of group(age, income, etc.)
+  #the following chunk follows from the above code styles
+pre_inc <- model3 %>%
+  add_predicted_draws(newdata=incgrp_p,
+                      allow_new_levels=TRUE) %>%
+  rename(vote_predict = .prediction) %>% 
+  mutate(vote_predict_p = vote_predict*prop) %>% 
+  group_by(incgrp, .draw) %>% 
+  summarise(vote_predict = sum(vote_predict_p)) %>% 
+  group_by(incgrp) %>% 
+  summarise(mean = mean(vote_predict), 
+            lower = quantile(vote_predict, 0.025), 
+            upper = quantile(vote_predict, 0.975))
+pre_race <- model3 %>%
+  add_predicted_draws(newdata=race_p,
+                      allow_new_levels=TRUE) %>%
+  rename(vote_predict = .prediction) %>% 
+  mutate(vote_predict_p = vote_predict*prop) %>% 
+  group_by(race, .draw) %>% 
+  summarise(vote_predict = sum(vote_predict_p)) %>% 
+  group_by(race) %>% 
+  summarise(mean = mean(vote_predict), 
+            lower = quantile(vote_predict, 0.025), 
+            upper = quantile(vote_predict, 0.975))
+pre_state <- model3 %>%
+  add_predicted_draws(newdata=state_p,
+                      allow_new_levels=TRUE) %>%
+  rename(vote_predict = .prediction) %>% 
+  mutate(vote_predict_p = vote_predict*prop) %>% 
+  group_by(statefull, .draw) %>% 
+  summarise(vote_predict = sum(vote_predict_p)) %>% 
+  group_by(statefull) %>% 
+  summarise(mean = mean(vote_predict), 
+            lower = quantile(vote_predict, 0.025), 
+            upper = quantile(vote_predict, 0.975))
+```
+
+```{r plots, echo = FALSE, message = FALSE}
+pre_age %>% 
+  ggplot(aes(y = mean, x = factor(agegrp, 
+                                  levels = c("Under 20",
+                                             "Between 20 to 30",
+                                             "Between 30 to 40",
+                                             "Between 40 to 50",
+                                             "Between 50 to 60",
+                                             "Between 60 to 70",
+                                             "Between 70 to 80",
+                                             "Above 80")))) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) + 
+  scale_x_discrete(guide = guide_axis(n.dodge = 3))+
+  ylab("Proportion voting for Trump") + 
+  xlab("Age in 2018")
+pre_inc %>% 
+  ggplot(aes(y = mean, x = factor(incgrp,
+                                  levels = c("Less than $35,000",
+                                             "$35,000 to $69,999",
+                                             "$70,000 to $99,999",
+                                             "$100,000 to $174,999",
+                                             "$175,000 to $249,999",
+                                             "More than $250,000")))) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) + 
+  scale_x_discrete(guide = guide_axis(n.dodge = 3))+
+  ylab("Proportion voting for Trump") + 
+  xlab("Income level in 2018")
+pre_race %>% 
+  ggplot(aes(y = mean, x = forcats::fct_inorder(race))) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) + 
+  scale_x_discrete(guide = guide_axis(n.dodge = 3))+
+  ylab("Proportion voting for Trump") + 
+  xlab("Race")
+statebins(state_data = pre_state, 
+          state_col = "statefull",
+          value_col = "mean",
+          name = "Trump Vote",
+          palette = "OrRd",
+          direction = 1,
+          font_size=4,
+          dark_label = "black", 
+          light_label = "white",
+          round=TRUE)+
+  labs(title = "Mean Forecasted Trump Vote") + 
+  theme_statebins(legend_position="right")
+```
+
+# Discussion
+
+## First discussion point
+
+If my paper were 10 pages, then should be be at least 2.5 pages. The discussion is a chance to show off what you know and what you learnt from all this. 
+
+## Second discussion point
+
+## Third discussion point
+
+## Weaknesses and next steps
+
+Weaknesses and next steps should also be included.
+
+\newpage
+
+# Appendix {-}
+
+\newpage
+
+
+# References
+capitalize function
+https://stackoverflow.com/a/6364905
+
