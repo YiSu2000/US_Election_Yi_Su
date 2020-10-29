@@ -197,7 +197,7 @@ The Republican party and the Democratic party are the two dominant parties holdi
 
 In this report, we are interested in forecasting the 2020 U.S. election. Specifically, who is more likely to win among Trump and Biden? To do this, the support of a voter intent survey is essential, and we used the UCLA Nationscape survey dataset [@citesurvey] requested from the URL in reference. The discussion of this survey dataset will be included in *Section 2.1*. Among the many statistical techniques of forecasting election, we used multilevel regression and poststratification (MRP) to produce estimates of votes. The MRP involves partitioning the data into small cells based on demographic, then estimate voter intent (Trump or Biden) in the cell level using a multilevel regression model, and summing the estimates based on the demographic of interest at last. To make the forecasts, we used a census-like dataset, the American Community Survey Dataset [@citepsd]. This is the dataset where partitioning into cells happens and we make predictions from here. The discussion on this dataset is included in *Section 2.2*. 
 
-The discussion on the specific procedure of this report and the multilevel regression model is included in *Section 3*, which we regressed the voting intent based on age, household income, race and states in the US. In *Section 4*, we present and briefly discuss the resultant model and present estimates of the voting intent between Trump and Biden for different demographic groups. We will conclude in *Section 5* with discussions of our results as well as some weaknesses and future improvements on our procedure.
+The discussion on the specific procedure of this report and the multilevel regression model is included in *Section 3*, which we regressed the voting intent based on age, household income, race and states in the US. In *Section 4*, we present and briefly discuss the resultant model and present estimates of the voting intent between Trump and Biden for different demographic groups. We will conclude in *Section 5* with discussions of our results as well as some weaknesses and future improvements on our procedure. This report was produced using `R` [@citeR], as well as some packages which will be mentioned in each section for usage.
 
 # Data
 
@@ -356,6 +356,9 @@ kable(agegrp_p[1:6,],
 ```
 
 
+
+
+
 # Model
 
 ```{r model, echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
@@ -390,6 +393,23 @@ mcmc_plot(model4, type = "trace")
 # set seed to the last 4 digits of my student number
 
 ```
+
+```{r naive, echo = FALSE, message = FALSE, warning = FALSE}
+counts <- counts%>%
+  mutate(prop = n/sum(n))
+#create proportion that is to the whole population instead of group level
+fc <- model4 %>%
+  predict(newdata = counts)
+#make predictions
+predictions <- merge(data.frame(counts, row.names=NULL), 
+            data.frame(fc, row.names=NULL),
+            by = 0, all = TRUE)
+#merge the two data frames
+TrumpForecast <- sum((predictions$prop)*(predictions$Estimate))
+#overall forecast of the proportion of population that will vote for Trump
+```
+
+
 
 ```{r predictions, echo = FALSE, message = FALSE}
 #prediction for each age group
