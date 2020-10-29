@@ -1,14 +1,17 @@
 ---
-title: "TBD"
+title: "Forecasting US Election: Trump or Biden"
 subtitle: "TBD"
 author: "Yi Su"
-thanks: "Code and data are available at: LINK."
+thanks: "Code and data are available at: https://github.com/YiSu2000/US_Election_Yi_Su"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 abstract: |
-  | First sentence. Second sentence. Third sentence. Fourth sentence. 
+  | First sentence. Second sentence. Third sentence. Fourth sentence.
 output:
   bookdown::pdf_document2:
+bibliography: references.bib
 toc: FALSE
+header-includes:
+ \usepackage{float}
 ---
 
 ```{r setup, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}
@@ -17,30 +20,37 @@ library(broom)
 library(skimr)
 library(naniar)
 library(tidyverse)
+library(haven)
 library(tidybayes)
 library(ggplot2)
 library(brms)
 library(statebins)
-library(tools)
+library(kableExtra)
+library(data.table)
+#packages used
 
 sample_data <- read_csv("/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/inputs/data/reduced_data.csv")
+# the sample data from reducing the full survey dataset from Democracy Fund and UCLA Nationscape.
 ps_data <- read_csv("/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/inputs/data/reduced_data_post_strat_1.csv")
+# post-stratify dataset reduced from the ACS dataset.
 ```
 
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H')
+```
 
 ```{r survey data, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}
-#we are only interested in whether they vote for Trump or Biden, so we would like to treat all observations saying "I will not vote" and "I am not sure" as missing values. This reduces the sample size to 4753 observations of individuals.
+#we are only interested in whether they vote for Trump or Biden, so we would like to treat all observations saying "I will not vote" and "I am not sure" as missing values. This reduces the sample size to 4753 observations of individuals from 6480.
 sample_data <- sample_data%>%
   replace_with_na(replace = list(
     vote_2020 = c("I am not sure/don't know", "I would not vote", "Someone else")))%>%
   na.omit()
 ps_data <- ps_data%>%na.omit()
+#also omit missing values in ps_data
 sample_data$Who <- ifelse(sample_data$vote_2020 == "Donald Trump", 1, 0)
 #Construct binary dummy variable, 1 for vote for Trump and 0 for vote for Biden
-#We are interested in regress who to vote on age, household income level, race, and state in US.
-
+#We are interested in regress voting for Trump or Biden on age groups, household income level, race, and states in the U.S..
 # For the codes below, I am aware that these might be the more "ugly" or wordy approach, but this is simply the easiest to interpret and modified if needed later.
-
 
 #first create household income levels 
 sample_data <- sample_data%>%
@@ -98,12 +108,12 @@ sample_data <- sample_data %>%
                             age >= 60  & age < 70 ~ "Between 60 to 70",
                             age >= 70  & age < 80 ~ "Between 70 to 80",
                             age >= 80  ~ "Above 80"))
-#These code on state names are enlighten by Alexander Rohan's Piazza answer    
+#These code on state names are enlighten by Alexander Rohan's Piazza answer   
 state_names <- tibble(statefull = state.name, state = state.abb)   
 sample_data <-sample_data%>%left_join(state_names)         
 ```
 
-```{r poststrat data, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}}
+```{r poststrat_data, include=FALSE, echo = FALSE, message = FALSE, warning=FALSE}
 ps_data <- ps_data%>%
   replace_with_na(replace = list(hhincome = 9999999))%>%
   na.omit()
@@ -114,6 +124,7 @@ simpleCap <- function(x) {
       sep="", collapse=" ")
 }
 ps_data$statefull <- sapply(ps_data$stateicp, simpleCap)
+#Recode D.C. to Washington since the sample dataset doesn't recognize D.C.
 ps_data <- ps_data%>%
   mutate(statefull = recode(statefull,
    'District Of Columbia' = "Washington"
@@ -129,6 +140,7 @@ ps_data <- ps_data%>%
     hhincome >= 250000 ~ "More than $250,000"
   ))
 #similarly, create age groups accordingly to the survey sample dataset
+#this only has 7 groups for reasons to be discussed in section 2.1
 ps_data <- ps_data %>% 
   mutate(agegrp = case_when(age < 20 ~ "Under 20",
                             age >= 20  & age < 30 ~ "Between 20 to 30",
@@ -136,8 +148,7 @@ ps_data <- ps_data %>%
                             age >= 40  & age < 50 ~ "Between 40 to 50",
                             age >= 50  & age < 60 ~ "Between 50 to 60",
                             age >= 60  & age < 70 ~ "Between 60 to 70",
-                            age >= 70  & age < 80 ~ "Between 70 to 80",
-                            age >= 80  ~ "Above 80"))
+                            age >= 70  ~ "Above 70"))
 #create race groups
 ps_data <- ps_data%>%
   mutate(race = recode(race,
@@ -153,19 +164,23 @@ ps_data <- ps_data%>%
                        'three or more major races'= "Some other race"))
 #then we add proportions to the three group level variables we choose, that are race, age, and states
 counts <- ps_data%>%count(agegrp, race, statefull,incgrp)
-counts
+#post-stratify each group, counting the proportions stratified by each group
+#counting proportion based on age group
 agegrp_p <- counts %>% 
   group_by(agegrp) %>% 
   mutate(prop = n/sum(n)) %>% 
   ungroup()
+#based on states
 state_p <- counts %>% 
   group_by(statefull) %>% 
   mutate(prop = n/sum(n)) %>% 
   ungroup()
+#based on race
 race_p <- counts %>%
   group_by(race) %>% 
   mutate(prop = n/sum(n)) %>% 
   ungroup()
+#based on income group
 incgrp_p <- counts %>% 
   group_by(incgrp) %>% 
   mutate(prop = n/sum(n)) %>% 
@@ -174,40 +189,186 @@ incgrp_p <- counts %>%
 
 # Introduction
 
+President election has been one of the most important political events in the United States of America which happens every 4 years. Most American citizens will be involved in this event and make their decision on which direction the county will go at least in the next 4 years. Meanwhile, the rest of the world will also keep their eye on the election because of the global political position of the US. The election is an invisible war between the parties of the US, among those parties, the Republican and the Democratic are the two oldest and dominant parties.
 
+The Republican party and the Democratic party are the two dominant parties holding a large number of positions in congress. Throughout the history of the US, the competition between the president nominates of these two parties has never stopped. In 2016, Donald J. Trump won the election as the nominate of the Republican party and defeating his opponent from the Democratic party, Hilary Clinton. In 2020, Trump is the Republican nominate again and this time, his main opponent from the Democratic party is Joe Biden, a former vice president of the U.S. during 2009-2017. In general, these two nominates are more likely to win the election than nominates from other parties like the Green party. 
 
+In this report, we are interested in forecasting the 2020 U.S. election. Specifically, who is more likely to win among Trump and Biden? To do this, the support of a voter intent survey is essential, and we used the UCLA Nationscape survey dataset [@citesurvey] requested from the URL in reference. The discussion of this survey dataset will be included in *Section 2.1*. Among the many statistical techniques of forecasting election, we used multilevel regression and poststratification (MRP) to produce estimates of votes. The MRP involves partitioning the data into small cells based on demographic, then estimate voter intent (Trump or Biden) in the cell level using a multilevel regression model, and summing the estimates based on the demographic of interest at last. To make the forecasts, we used a census-like dataset, the American Community Survey Dataset [@citepsd]. This is the dataset where partitioning into cells happens and we make predictions from here. The discussion on this dataset is included in *Section 2.2*. 
+
+The discussion on the specific procedure of this report and the multilevel regression model is included in *Section 3*, which we regressed the voting intent based on age, household income, race and states in the US. In *Section 4*, we present and briefly discuss the resultant model and present estimates of the voting intent between Trump and Biden for different demographic groups. We will conclude in *Section 5* with discussions of our results as well as some weaknesses and future improvements on our procedure.
 
 # Data
 
+## Democracy Fund + UCLA Nationscape Data 
 
-# Model
-```{r model, echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
-#due to the ability of my laptop, if I try adding more layers to other variables my laptop would fail to do so.....So I decided to only add layers on age group, states, and race.
-model3 <- brm(Who ~ (1|agegrp) + (1|incgrp) + (1|statefull) + (1|race), 
-            data = sample_data, 
-            family = bernoulli(),
-            seed = 6431,
-            silent = TRUE,
-            refresh = 0,
-            file = "/Users/jordans2000/Desktop/STA304/PS4-Election/Forecast_US_Election_YS6431/outputs/model/model3")
-summary(model3)
-mcmc_plot(model3, type = "trace")+
-  labs(title = "Figure 3")
-# set seed to the last 4 digits of my student number
+The Nationscape is a survey conducted from July 2019 to December 2020, collecting demographics of the respondent as well as their voting intent during the 2020 election. The survey samples are provided by Lucid, an online exchange platform focusing on market research. Specifically, the samples were drawn from the online platform based on a set of demographic quotas like age, region, and gender.
+
+The Nationscape aimed at conducting 500,000 interviews in total and roughly 6,250 interviews per week. The survey took the form of an online survey using a survey software controlled by the Nationscape team, however, the respondents were sent to the software directly by the Lucid platform. Since only the respondent will only be directed to the survey software if they match on the Lucid platform, the non-response rate should be reasonably low. Although the quality of the responses is expected to be high from the Lucid platform, the representativeness of the population of interest still needs to be assessed. This is solved by comparing the Nationscape's results to the results of the Pew Research Center’s evaluations of online non-probability samples in 2018. The Pew Research Center’s 2018 report assessed how various choices impact the quality of the online survey.
+
+After requesting the data on the June-25-2020 phase of the Nationscape survey dataset. We need to modify the original observation levels based on our needs. In this report, we are interested in modeling the voting intent between Trump and Biden by age, household income, race, and states of living. Only 4 variables were chosen because of some hardware limitations which will be discussed in *Section 3* in detail. 
+
+First, we created a binary variable with 1 meaning vote for Trump and 0 meaning vote for Biden. This will be the response variable of our regression model. We deleted the observations that will vote for nominates other than Trump and Biden, and this caused a reduction in sample size for our model. Further discussion of the potential hazard of this reduction is included in *Section 5.4*.
+
+Second, to make cells wider for a stable sample mean in the MRP process, we redefined some variables related to age, race, and household income. We reduced the household income levels from 24 to 6. For the race, the categories for races are reduced from 15 to 5 wider groups. Similarly, age was redefined from a discrete variable to a categorical variable with 8 levels, each level representing a decade group of age.  Since the state is an important factor in the election, there will be no modification on it. Some example observations in the dataset are shown in Table \@ref(tab:tab1)). These modifications of the dataset were done with `R` [@citeR], through R packages `tidyverse` [@citetidyverse], `naniar` [@citenaniar], `haven` [@citehaven] and `broom` [@citebroom]. And Table \@ref(tab:tab1)) was created with `knitr` package [@citeknitr] and `kableExtra` package [@citekable].
+
+
+```{r tab1, echo = FALSE, message = FALSE}
+options(knitr.kable.NA = '')
+kable(sample_data[1:6,c(5, 18, 19, 20, 21, 22)], 
+      col.names = c("Expected Vote in 2020", "", "Income level", "Race", "Age group", "State"), 
+      caption = "the first 6 rows of the dataset", 
+      align = "c")%>%
+  kable_styling(latex_options = c("hold_position","scale_down"))
 ```
 
+```{r echo= FALSE, message = FALSE, warning = FALSE, error = FALSE}
+z1 <- data.frame(table(sample_data$agegrp))
+z2 <- data.frame(table(sample_data$incgrp))
+z3 <- data.frame(table(sample_data$race))
+z4 <- data.frame(table(sample_data$statefull))
+#create table of counts of each category level/group
+h1 <- merge(data.frame(z1[c(8,2,3,4,5,6,7,1),], row.names=NULL), 
+            data.frame(z2[c(5,3,4,2,1,6),], row.names=NULL),
+  by = 0, all = TRUE)
+h2 <- merge(data.frame(h1, row.names=NULL), 
+            data.frame(z3, row.names=NULL),
+  by = 0, all = TRUE)
+h3 <- merge(data.frame(h2, row.names=NULL), 
+            data.frame(head(z4, 8), row.names=NULL),
+  by = 0, all = TRUE)
+#merging all the tables, only first 8 rows for the states
+```
+
+Next, we check the frequency of each group in our modified dataset to ensure variation in explanatory variables for the accuracy of the model. Table \@ref(tab:tab1)) displays the frequency of each group within each variable. However, since there are 50 states plus Washington D.C., we only display the first 6 states in alphabetic order. Although only 6 states are shown, the problem is clear that some states like Alaska and Arkansas have a significantly fewer number of respondents than large states like California. The same situation happened in all other variables as well, White people have way more number of observations than Chinese or Japanese, the number of respondents above 80 is way less than others, and the number of respondents with higher household income decreases as income level increase. 
+
+Unfortunately, we can only redefine the age groups since the other variables groups need to line up exactly the same between the two datasets. And some variables are already at the base-line level and could not be further modified. These might cause some issues in model training which is discussed in *Section 3*. We can specify states into different regions, but that would obey our goal of forecasting election which is highly dependent on winning in each state.
+
+```{r tab2, echo = FALSE, message = FALSE}
+options(knitr.kable.NA = '')
+kable(h3[1:8,4:11], 
+      col.names = c("Age Group", "Count", "Income level", "Count", "Race","Count", "State", "Count"),
+      align = "c", 
+      caption = "Frequency of each group")%>%
+  kable_styling(latex_options = c("hold_position","scale_down"))
+```
+
+```{r echo = FALSE, message = FALSE}
+sample_data <- sample_data %>% 
+  mutate(agegrp = case_when(age < 20 ~ "Under 20",
+                            age >= 20  & age < 30 ~ "Between 20 to 30",
+                            age >= 30  & age < 40 ~ "Between 30 to 40",
+                            age >= 40  & age < 50 ~ "Between 40 to 50",
+                            age >= 50  & age < 60 ~ "Between 50 to 60",
+                            age >= 60  & age < 70 ~ "Between 60 to 70",
+                            age >= 70  ~ "Above 70"))
+#now we only have 7 levels of age group since we combined the last two groups
+```
+
+After we joined the age group of above 80 into the age group between 70 to 80. Further concerns with this pick of variables are any underlying strong multicollinearity between age and income. We roughly check this by Figure \@ref(fig:fig1), which was created with the ggplot2 package [@citeggplot] and data.table package [@citedata]. We do see an increasing income level trend with aging in general. However, the degree of multicollinearity is not sufficient to violate the assumption of no perfect multicollinearity between explanatory variables since the general proportion of incomes remains steady except for the age group between 20 to 30.
+
+```{r fig1, fig.cap = "Percentage of income levels for age groups", echo = FALSE, message = FALSE, out.width="80%"}
+nset <- setDT(sample_data)[,list(count = .N), by = .(agegrp,incgrp)][,list(incgrp = incgrp, count = count, percent_fmt = paste0(formatC(count*100/sum(count), digits = 3), "%"),percent_num = count/sum(count)), by = agegrp]
+nset%>%
+  ggplot(aes(x = factor(agegrp,
+                        levels = c("Under 20",
+                                   "Between 20 to 30",
+                                   "Between 30 to 40",
+                                   "Between 40 to 50",
+                                   "Between 50 to 60",
+                                   "Between 60 to 70",
+                                   "Above 70")), 
+             y = percent_num,
+             fill = factor(incgrp,
+                           levels = c("Less than $35,000",
+                                      "$35,000 to $69,999",
+                                      "$70,000 to $99,999",
+                                      "$100,000 to $174,999",
+                                      "$175,000 to $249,999",
+                                      "More than $250,000"))))+
+  geom_bar(position = position_fill(reverse=FALSE), 
+           stat = "identity")+
+  coord_flip()+
+  geom_text(aes(label = percent_fmt),
+            position = position_fill(vjust = 0.5), 
+            size = 4,
+            check_overlap = TRUE)+
+  # turn on check overlap to avoid any overlap
+  scale_fill_discrete(name = "Income level")+
+  xlab(label = "Age Group")+
+  ylab(label = "Percentage")
+```
+
+## American Community Surveys Data
+```{r echo= FALSE, message = FALSE, warning = FALSE, error = FALSE}
+a1 <- data.frame(table(ps_data$agegrp))
+a2 <- data.frame(table(ps_data$incgrp))
+a3 <- data.frame(table(ps_data$race))
+a4 <- data.frame(table(ps_data$statefull))
+#create table of counts of each category level/group
+t1 <- merge(data.frame(a1[c(7,2,3,4,5,6,1),], row.names=NULL), 
+            data.frame(a2[c(5,3,4,2,1,6),], row.names=NULL),
+  by = 0, all = TRUE)
+t2 <- merge(data.frame(t1, row.names=NULL), 
+            data.frame(a3, row.names=NULL),
+  by = 0, all = TRUE)
+t3 <- merge(data.frame(t2, row.names=NULL), 
+            data.frame(head(a4, 8), row.names=NULL),
+  by = 0, all = TRUE)
+#merging all the tables, only first 8 rows for the states
+```
+
+```{r tab3, echo = FALSE, message = FALSE}
+options(knitr.kable.NA = '')
+kable(t3[1:8,4:11], 
+      col.names = c("Age Group", "Count", "Income level", "Count", "Race","Count", "State", "Count"),
+      align = "c", 
+      caption = "Frequency of each group")%>%
+  kable_styling(latex_options = c("hold_position","scale_down"))
+```
+
+# Model
+
+```{r model, echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
+#due to the ability of my laptop, if I try adding more layers to other variables my laptop would fail to do so.....So I decided to only add layers on age group, states, and race.
+#Bayesian model with multi-leveling on age, income, race and state using the equation in this section
+model4 <- brm(Who ~ (1|agegrp) + (1|incgrp) + (1|statefull) + (1|race), 
+            data = sample_data, 
+            family = bernoulli(),
+            #regression on vote for trump (binary)
+            seed = 6431,
+            #seed not perfect in brm, but better than nothing
+            silent = TRUE,
+            refresh = 0,
+            #the above option turns off all message completetly wehn knitting
+            file = "/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/outputs/model/model4")
+#file the model so it doesn't run everytime
+summary(model4)
+```
+
+
 \begin{equation}
-Pr(\theta | y) = \frac{Pr(y | \theta) Pr(\theta)}{Pr(y)}  (\#eq:bayes)
+Pr(y_{i}=1) = logit^{-1}(\alpha^{age\,group}_{a[i]}+ \alpha^{income\,group}_{a[i]}+ \alpha^{race}_{a[i]}+ \alpha^{state}_{a[i]}) (\#eq:bayes)
 \end{equation}
 
-Equation \@ref(eq:bayes) seems useful, eh?
+Equation \@ref(eq:bayes)
 
-Here's a dumb example of how to use some references: In paper we run our analysis in `R` [@citeR]. We also use the `tidyverse` which was written by @thereferencecanbewhatever If we were interested in baseball data then @citeLahman could be useful. 
+
+
+Here's a dumb example of how to use some references: In paper we run our analysis in `R` [@citeR]. We also use the `tidyverse` which was written by @thereferencecanbewhatever If we were interested in baseball data then @citeLahman could be useful.
 
 
 # Results
+
+```{r trace, fig.cap = "Convergence of Model Parameters",echo = FALSE, message=FALSE, warning=FALSE,out.width="80%"}
+mcmc_plot(model4, type = "trace")+
+  labs(title = "Figure 3")
+# set seed to the last 4 digits of my student number
+
+```
+
 ```{r predictions, echo = FALSE, message = FALSE}
-pre_age <- model3 %>%
+#prediction for each age group
+pre_age <- model4 %>%
   add_predicted_draws(newdata=agegrp_p,
                       allow_new_levels=TRUE) %>%
   #create predictions
@@ -223,7 +384,8 @@ pre_age <- model3 %>%
             upper = quantile(vote_predict, 0.975))
   #return the mean of predict for each level of group(age, income, etc.)
   #the following chunk follows from the above code styles
-pre_inc <- model3 %>%
+#prediction for each income group
+pre_inc <- model4 %>%
   add_predicted_draws(newdata=incgrp_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -234,7 +396,8 @@ pre_inc <- model3 %>%
   summarise(mean = mean(vote_predict), 
             lower = quantile(vote_predict, 0.025), 
             upper = quantile(vote_predict, 0.975))
-pre_race <- model3 %>%
+#prediction for each race
+pre_race <- model4 %>%
   add_predicted_draws(newdata=race_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -245,7 +408,8 @@ pre_race <- model3 %>%
   summarise(mean = mean(vote_predict), 
             lower = quantile(vote_predict, 0.025), 
             upper = quantile(vote_predict, 0.975))
-pre_state <- model3 %>%
+#prediction for each states
+pre_state <- model4 %>%
   add_predicted_draws(newdata=state_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -258,7 +422,7 @@ pre_state <- model3 %>%
             upper = quantile(vote_predict, 0.975))
 ```
 
-```{r plots, echo = FALSE, message = FALSE}
+```{r agep, fig.cap = "Forcasting Votes for Trump by Age Groups", echo = FALSE, message = FALSE, fig.show="hold", out.width="80%"}
 pre_age %>% 
   ggplot(aes(y = mean, x = factor(agegrp, 
                                   levels = c("Under 20",
@@ -267,13 +431,19 @@ pre_age %>%
                                              "Between 40 to 50",
                                              "Between 50 to 60",
                                              "Between 60 to 70",
-                                             "Between 70 to 80",
-                                             "Above 80")))) + 
+                                             "Above 70")))) + 
+  #factor the age groups to be in order
   geom_point() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) + 
   scale_x_discrete(guide = guide_axis(n.dodge = 3))+
+  #make x-axis variable names non-overlapping
   ylab("Proportion voting for Trump") + 
   xlab("Age in 2018")
+#the estimated mean vote for trump between different age group
+```
+
+
+```{r incp, fig.cap = "Forcasting Votes for Trump by Household Income Groups", echo = FALSE, fig.show="hold", message = FALSE,out.width="80%"}
 pre_inc %>% 
   ggplot(aes(y = mean, x = factor(incgrp,
                                   levels = c("Less than $35,000",
@@ -282,11 +452,17 @@ pre_inc %>%
                                              "$100,000 to $174,999",
                                              "$175,000 to $249,999",
                                              "More than $250,000")))) + 
+  #factor income groups to be in order
   geom_point() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) + 
   scale_x_discrete(guide = guide_axis(n.dodge = 3))+
   ylab("Proportion voting for Trump") + 
   xlab("Income level in 2018")
+#the estimated mean vote for trump between different income group
+```
+
+
+```{r racep, fig.cap = "Forcasting Votes for Trump by Race", echo = FALSE, message = FALSE, fig.show="hold", out.width="80%"}
 pre_race %>% 
   ggplot(aes(y = mean, x = forcats::fct_inorder(race))) + 
   geom_point() +
@@ -294,6 +470,11 @@ pre_race %>%
   scale_x_discrete(guide = guide_axis(n.dodge = 3))+
   ylab("Proportion voting for Trump") + 
   xlab("Race")
+#the estimated mean vote for trump between different race group
+```
+
+
+```{r statep, fig.cap = "Forcasting Votes for Trump by States", echo = FALSE, message = FALSE, fig.show="hold", out.width="80%"}
 statebins(state_data = pre_state, 
           state_col = "statefull",
           value_col = "mean",
@@ -306,6 +487,7 @@ statebins(state_data = pre_state,
           round=TRUE)+
   labs(title = "Mean Forecasted Trump Vote") + 
   theme_statebins(legend_position="right")
+#create the u.s. heat map of votes for trump using statebins, higher voting likelihood for trump will be displayed more redish.
 ```
 
 # Discussion
@@ -330,6 +512,5 @@ Weaknesses and next steps should also be included.
 
 
 # References
-capitalize function
-https://stackoverflow.com/a/6364905
+
 

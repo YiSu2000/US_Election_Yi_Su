@@ -5,9 +5,9 @@ This repo contains code and data for forecasting the US 2020 presidential electi
 Inputs contain data that are unchanged from their original. Since they are not to be shared publicly, not input has been pushed to Github.
 We use two datasets: 
 
-- [Survey data - Survey Data thankfully obtained from: 'https://www.voterstudygroup.org/publication/nationscape-data-set'.]
+- [Survey data - Survey Data thankfully obtained from Democracy Fund and UCLA Nationscape dataset, requested from: 'https://www.voterstudygroup.org/publication/nationscape-data-set'.]
 
-- [ACS data - America Community Survey dataset from: https://usa.ipums.org/usa/index.shtml]
+- [ACS data - America Community Survey dataset from IPUMS: https://usa.ipums.org/usa/index.shtml]
 
 Outputs the report and supporting material.
 
