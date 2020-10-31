@@ -1,8 +1,8 @@
 #### Preamble ####
-# Purpose: Prepare and clean the survey data downloaded from [...UPDATE ME!!!!!]
-# Author: Rohan Alexander and Sam Caetano [CHANGE THIS TO YOUR NAME!!!!]
-# Data: 22 October 2020
-# Contact: rohan.alexander@utoronto.ca [PROBABLY CHANGE THIS ALSO!!!!]
+# Purpose: Prepare and clean the survey data downloaded from IPUMS: https://usa.ipums.org/usa/index.shtml
+# Author: Yi Su [CHANGE THIS TO YOUR NAME!!!!]
+# Data: 29 October 2020
+# Contact: jordan.su@mail.utoronto.ca
 # License: MIT
 # Pre-requisites: 
 # - Need to have downloaded the ACS data and saved it to inputs/data

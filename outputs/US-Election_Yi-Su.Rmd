@@ -6,6 +6,7 @@ thanks: "Code and data are available at: https://github.com/YiSu2000/US_Election
 date: "`r format(Sys.time(), '%d %B %Y')`"
 abstract: |
   | First sentence. Second sentence. Third sentence. Fourth sentence.
+  | **keywords:** Forecasting; US 2020 Election; Donald J. Trump; Joe Biden; Multilevel Regression with Post-stratification
 output:
   bookdown::pdf_document2:
 bibliography: references.bib
@@ -195,34 +196,40 @@ President election has been one of the most important political events in the Un
 
 The Republican party and the Democratic party are the two dominant parties holding a large number of positions in congress. Throughout the history of the US, the competition between the president nominates of these two parties has never stopped. In 2016, Donald J. Trump won the election as the nominate of the Republican party and defeating his opponent from the Democratic party, Hilary Clinton. In 2020, Trump is the Republican nominate again and this time, his main opponent from the Democratic party is Joe Biden, a former vice president of the U.S. during 2009-2017. In general, these two nominates are more likely to win the election than nominates from other parties like the Green party. 
 
-In this report, we are interested in forecasting the 2020 U.S. election. Specifically, who is more likely to win among Trump and Biden? To do this, the support of a voter intent survey is essential, and we used the UCLA Nationscape survey dataset [@citesurvey] requested from the URL in reference. The discussion of this survey dataset will be included in *Section 2.1*. Among the many statistical techniques of forecasting election, we used multilevel regression and poststratification (MRP) to produce estimates of votes. The MRP involves partitioning the data into small cells based on demographic, then estimate voter intent (Trump or Biden) in the cell level using a multilevel regression model, and summing the estimates based on the demographic of interest at last. To make the forecasts, we used a census-like dataset, the American Community Survey Dataset [@citepsd]. This is the dataset where partitioning into cells happens and we make predictions from here. The discussion on this dataset is included in *Section 2.2*. 
+In this report, we are interested in forecasting the 2020 U.S. election. Specifically, who is more likely to win among Trump and Biden? To do this, the support of a voter intent survey is essential, and we used the UCLA Nationscape survey dataset [@citesurvey] requested from the URL in reference. The discussion of this survey dataset will be included in *Section 2.1*. Among the many statistical techniques of forecasting election, we used multilevel regression and post-stratification   (MRP) to produce estimates of votes. The MRP involves partitioning the data into small cells based on demographic characteristics of our choice, then estimate voter intent (Trump or Biden) in the cell level using a multilevel regression model. To make the forecasts, we used a census-like dataset, the American Community Survey Dataset [@citepsd]. This is the dataset where partitioning into cells happens and we make predictions from here. The discussion on this dataset is included in *Section 2.2*. 
 
-The discussion on the specific procedure of this report and the multilevel regression model is included in *Section 3*, which we regressed the voting intent based on age, household income, race and states in the US. In *Section 4*, we present and briefly discuss the resultant model and present estimates of the voting intent between Trump and Biden for different demographic groups. We will conclude in *Section 5* with discussions of our results as well as some weaknesses and future improvements on our procedure. This report was produced using `R` [@citeR], as well as some packages which will be mentioned in each section for usage.
+The discussion on the specific procedure of this report and the multilevel regression model is included in *Section 3*, which we regressed the voting intent based on age, household income, race and states in the US. In *Section 4*, we present and discuss the resultant model and present estimates of the voting intent between Trump and Biden. Meanwhile, *Section 5* includes discussions of our forecast results as well as some weaknesses and future improvements on our procedure. This report was produced using `R` [@citeR], as well as some packages which will be mentioned in each section for usage.
+
+The forecast results are divided into two main part, the first part is an overall support rate among the ACS dataset in favor of Trump. The second part is to calculate the mean support rate of Trump in each state and then calculate the number of electoral votes from each state that we forecast Trump to get.
 
 # Data
 
 ## Democracy Fund + UCLA Nationscape Data 
 
-The Nationscape is a survey conducted from July 2019 to December 2020, collecting demographics of the respondent as well as their voting intent during the 2020 election. The survey samples are provided by Lucid, an online exchange platform focusing on market research. Specifically, the samples were drawn from the online platform based on a set of demographic quotas like age, region, and gender.
+The Nationscape [@citesurvey] is a survey conducted from July 2019 to December 2020, collecting demographics of the respondent as well as their voting intent during the 2020 election. The survey samples are provided by Lucid, an online exchange platform focusing on market research. Specifically, the samples were drawn from the online platform based on a set of demographic quotas like age, region, and gender.
 
 The Nationscape aimed at conducting 500,000 interviews in total and roughly 6,250 interviews per week. The survey took the form of an online survey using a survey software controlled by the Nationscape team, however, the respondents were sent to the software directly by the Lucid platform. Since only the respondent will only be directed to the survey software if they match on the Lucid platform, the non-response rate should be reasonably low. Although the quality of the responses is expected to be high from the Lucid platform, the representativeness of the population of interest still needs to be assessed. This is solved by comparing the Nationscape's results to the results of the Pew Research Center’s evaluations of online non-probability samples in 2018. The Pew Research Center’s 2018 report assessed how various choices impact the quality of the online survey.
 
-After requesting the data on the June-25-2020 phase of the Nationscape survey dataset. We need to modify the original observation levels based on our needs. In this report, we are interested in modeling the voting intent between Trump and Biden by age, household income, race, and states of living. Only 4 variables were chosen because of some hardware limitations which will be discussed in *Section 3* in detail. 
+After requesting the data on the June-25-2020 phase of the Nationscape survey dataset. We need to modify the original observation levels based on our needs.  In this report, we are interested in modeling the voting intent between Trump and Biden by age, household income, race, and states of living. Only 4 variables were chosen because of some hardware limitations which will be discussed in *Section 3* in detail. The original survey data has race and income levels too narrow and thus might cause trouble in our regression.
 
 First, we created a binary variable with 1 meaning vote for Trump and 0 meaning vote for Biden. This will be the response variable of our regression model. We deleted the observations that will vote for nominates other than Trump and Biden, and this caused a reduction in sample size for our model. Further discussion of the potential hazard of this reduction is included in *Section 5.4*.
 
-Second, to make cells wider for a stable sample mean in the MRP process, we redefined some variables related to age, race, and household income. We reduced the household income levels from 24 to 6. For the race, the categories for races are reduced from 15 to 5 wider groups. Similarly, age was redefined from a discrete variable to a categorical variable with 8 levels, each level representing a decade group of age.  Since the state is an important factor in the election, there will be no modification on it. Some example observations in the dataset are shown in Table \@ref(tab:tab1)). These modifications of the dataset were done with `R` [@citeR], through R packages `tidyverse` [@citetidyverse], `naniar` [@citenaniar], `haven` [@citehaven] and `broom` [@citebroom]. And Table \@ref(tab:tab1)) was created with `knitr` package [@citeknitr] and `kableExtra` package [@citekable].
+Second, to make cells wider for a stable sample mean in the MRP process, we redefined some variables related to age, race, and household income. We reduced the household income levels from 24 to 6 wider income groups. For the race, the categories for races are reduced from 15 to 5 wider race groups. Similarly, age was redefined from a discrete variable to a categorical variable with 8 levels, each level representing a decade's group of age. For specific of the group names of each variables, refer to Table \@ref(tab:tab2) which is frequency table that includes all variable group names except for the states. Since the state is an important factor in the election and we need individual state forecast, there will be no modification on it. 
+
+The decision on how many level or group there is for each explanatory variable is based on both the Nationscape dataset and the ACS dataset. For example, since household income is a categorical variable in the Nationscape dataset, we need to categorize the household income numeric variables in the ACS dataset so the two dataset has the exactly same variable categories for forecasting. Another good example is with race, since the ACS dataset groups Chinese and Japanese into one category, we need to group the Chinese and Japanese samples in the Nationscape dataset into one category as well.
+
+Some example observations in the dataset are shown in Table \@ref(tab:tab1)). These modifications of the dataset were done with `R` [@citeR], through R packages `tidyverse` [@citetidyverse], `naniar` [@citenaniar], `haven` [@citehaven] and `broom` [@citebroom]. And Table \@ref(tab:tab1)) was created with `knitr` package [@citeknitr] and `kableExtra` package [@citekable].
 
 
 ```{r tab1, echo = FALSE, message = FALSE}
 options(knitr.kable.NA = '')
 #turn NA's in the table to spaces
-#kable showing example rows of the modifieddataset
+#kable showing example rows of the modified dataset
 kable(sample_data[1:6,c(5, 18, 19, 20, 21, 22)], 
       col.names = c("Expected Vote in 2020", "", "Income level", "Race", "Age group", "State"), 
       caption = "the first 6 rows of the dataset", 
       align = "c")%>%
-  kable_styling(latex_options = c("hold_position","scale_down"))
+  kable_styling(latex_options = c("HOLD_position","scale_down"))
   #kable_styling helps the layout of the kable
 ```
 
@@ -244,11 +251,13 @@ h3 <- merge(data.frame(h2, row.names=NULL),
 #merging all the tables, only first 8 rows for the states
 ```
 
-Next, we check the frequency of each group in our modified dataset to ensure variation in explanatory variables for the accuracy of the model. Table \@ref(tab:tab2) displays the frequency of each group within each variable. However, since there are 50 states, we only display the first 6 states in alphabetic order. Although only 6 states are shown, the problem is clear that some states like Alaska and Arkansas have a significantly fewer number of respondents than large states like California. The same situation happened in all other variables as well, White people have way more number of observations than Chinese or Japanese, the number of respondents above 80 is way less than others, and the number of respondents with higher household income decreases as income level increase. 
+Next, we check the frequency of each group in our modified dataset to ensure variation in explanatory variables for the accuracy of the model. Table \@ref(tab:tab2) displays the frequency of each group within each variable instead of plotting the distribution of each categorical variables. These frequencies tells us the distribution of each categorical variables and provides a more compact view to the problems within each variable. It is also a good display of all variable sub-group names. However, since there are 50 states, we only display the first 6 states in alphabetic order. 
 
-Unfortunately, we can only redefine the age groups since the other variables groups need to line up exactly the same between the two datasets. And some variables are already at the base-line level and could not be further modified. These might cause some issues in model training which is discussed in *Section 3*. We can specify states into different regions, but that would obey our goal of forecasting election which is highly dependent on winning in each state.
+Although only 6 states are shown, the problem is clear. Some states like Alaska and Arkansas have a significantly fewer number of respondents than large states like California. The same situation happened in all other variables as well, White people have way more number of observations than Chinese or Japanese and Alaskan natives, the number of respondents above 80 is way less than others, and the number of respondents with higher household income decreases as income level increase. 
 
-After we joined the age group of above 80 into the age group between 70 to 80. The remaining differences in other variables could be compensated by our Bayesian multilevel modeling approach. This approach pools the effect of the minor groups with other more major group cells, which is very beneficial for the states with less than a hundred respondent observations. 
+Unfortunately, we can only redefine the age groups since the other variables groups need to line up exactly the same between the two datasets. And some variables are already at the base-line level and could not be further modified.  We can choose to specify states into different regions, but that would obey one of our goal of forecasting election base on electoral votes which is highly dependent on winning in each state.
+
+After we joined the age group of above 80 into the age group between 70 to 80. The remaining differences in other variables would be small enough to be compensated by our Bayesian multilevel modeling approach. This approach pools the effect of the minor groups with other more major group cells, which is very beneficial for the states with less than a hundred respondent observations since we cannot redefine state groups.
 
 ```{r tab2, echo = FALSE, message = FALSE}
 options(knitr.kable.NA = '')
@@ -256,7 +265,7 @@ kable(h3[1:8,4:11],
       col.names = c("Age Group", "Count", "Income level", "Count", "Race","Count", "State", "Count"),
       align = "c", 
       caption = "Frequency of each group")%>%
-  kable_styling(latex_options = c("hold_position","scale_down"))
+  kable_styling(latex_options = c("HOLD_position","scale_down"))
 #similar to the previous table chunk
 ```
 
@@ -272,7 +281,7 @@ sample_data <- sample_data %>%
 #now we only have 7 levels of age group since we combined the last two groups
 ```
 
-Further concerns with this pick of variables are any underlying strong multicollinearity between age and income. We roughly check this by Figure \@ref(fig:fig1), which was created with the ggplot2 package [@citeggplot] and data.table package [@citedata]. We do see an increasing income level trend with aging in general. However, the degree of multicollinearity is not sufficient to violate the assumption of no perfect multicollinearity between explanatory variables since the general proportion of incomes remains steady except for the age group between 20 to 30.
+Further concerns with this pick of variables are any underlying strong multicollinearity between age and income. We roughly check this by Figure \@ref(fig:fig1), which was created with the `ggplot2` package [@citeggplot] and `data.table` package [@citedata]. We do see an increasing income level trend with aging in general. However, the degree of multicollinearity is not sufficient to violate the assumption of no perfect multicollinearity between explanatory variables since the general proportion of incomes remains steady except for the age group between 20 to 30.
 
 ```{r fig1, fig.cap = "Percentage of income levels for age groups", echo = FALSE, message = FALSE, out.width="80%"}
 nset <- setDT(sample_data)[,list(count = .N), by = .(agegrp,incgrp)][,list(incgrp = incgrp, count = count, percent_fmt = paste0(formatC(count*100/sum(count), digits = 3), "%"),percent_num = count/sum(count)), by = agegrp]
@@ -311,11 +320,15 @@ nset%>%
 
 ## American Community Surveys Data
 
-The American Community Survey (ACS) are monthly survey on rolling households that was designed as a substitute of a census. The target population of the ACS is all American households since it is designed to replace a census, and at full implementation, the sample would include about 3 million households across the US. The samples were extracted from the Census Bureau's larger internal data files, and thus shares the same sampling errors. For each sampled household, the ACS records the response from all member of the family. Privacy was protected by restricting geographic variables to state level and some of the individual variables are Top coded.
+The American Community Survey (ACS) [@citepsd] are monthly surveys on rolling households that was designed as a substitute of a census. The target population of the ACS is all American households since it is designed to replace a census, and at full implementation, the sample would include about 3 million households across the US. The samples were extracted from the Census Bureau's larger internal data files, and thus shares the same sampling errors. For each sampled household, the ACS records the response from all member of the family. Privacy was protected by restricting geographic variables to state level and some of the individual variables are Top coded.
 
-The ACS sample design took form of systematically sampling one household to represent each U.S. county each month. And that monthly sample will receive the ACS survey though mail at the beginning of the month. Non-respondents of the mail were contacted via telephone for a computer assisted telephone interview one month later. If the household is still not responding, one third of the non-respondents to the mail or telephone survey are contacted in person for a computer assisted personal interview one month following the last attempt.
+The ACS sample design took form of systematically sampling one household to represent each U.S. county each month. And that monthly sample will receive the ACS survey though mail at the beginning of the month. Non-respondents of the mail were contacted via telephone for a computer assisted telephone interview one month later. If the household is still not responding, one third of the non-respondents to the mail or telephone survey are contacted in person for a computer assisted personal interview one month following the last attempt. Since the ACS is sampling on a county level monthly, this makes it close to a census dataset. However, the initial attempt of survey through mailing may increase the initial non-response rate and decrease quality of response. Mailing back takes more effort as the respondent and mailing also have the uncertainty of lost mails during delivery. In the most extreme cases, the survey mail may be miss-classified as a junk mail and thus discarded. However, the latter attempts would likely to solve this issue, but requiring more effort.
 
-The ACS dataset is as good as a census dataset and thus appropriate as a poststratified dataset. For our purpose, we need to filter out all sample observations with age under 18 so the remaining all reaches the age to vote, and then assume all observation in the remaining dataset will vote between Trump and Biden. The next step is to create variable groups that are identical to ones we created in the Nationscape survey dataset. Ensuring the varaibles in both dataset lines up is how we could implement our model trained from the Nationscape dataset to the ACS dataset. Table \@ref(tab:tab3) shows the frequency of each group within the explanatory variables in a similar fashion of Table 2 in the previous section.
+The ACS dataset is as good as a census dataset and thus appropriate to our goal of forecasting for the whole nation's vote. For our purpose, we need to filter out all sample observations with age under 18 so the remaining all reaches the age to vote, and then assume all observation in the remaining dataset will vote between Trump and Biden. The next step is to create variable groups that are identical to ones we created in the Nationscape survey dataset. Ensuring the variables in both dataset lines up is how we could implement our model trained from the Nationscape dataset to the ACS dataset and create the estimated forecasts. 
+
+First we notice that the recorded household income in the ACS dataset are numeric variables and we need to first remove the observations with value *9999999* which is a special way of recording missing values. Then we could group the observations to 6 groups by the same logic statements on the numeric income values used in the modified Nationscape dataset. The procedure of grouping the race and age variables is identical to how we grouped the Nationscape dataset. The categorical groups of race was reduced from 9 groups to 6 groups by merging some smaller groups together. The age variable is also grouped to 7 decade groups identical to the modified Nationscape dataset. The above procedure gives a modified ACS dataset that have the identical categorical variables as the modified Nationscape dataset but with a lot more observation. Thus, Table \@ref(tab:tab1) can also be used as example observations of the modified ACS dataset. 
+
+Table \@ref(tab:tab3) shows the frequency of each group within the explanatory variables in a similar fashion of Table \@ref(tab:tab2) in the previous section. The reason why use a frequency table instead of plotting each variable is the same as for Table \@ref(tab:tab2).
 
 ```{r echo= FALSE, message = FALSE, warning = FALSE, error = FALSE}
 a1 <- data.frame(table(ps_data$agegrp))
@@ -341,64 +354,80 @@ kable(t3[1:8,4:11],
       col.names = c("Age Group", "Count", "Income level", "Count", "Race","Count", "State", "Count"),
       align = "c", 
       caption = "Frequency of each group")%>%
-  kable_styling(latex_options = c("hold_position","scale_down"))
+  kable_styling(latex_options = c("HOLD_position","scale_down"))
 ```
 
-The next step is to create sub-datasets capable of the poststratification part of the MRP approach. The first step is to sum up all the observations in the dataset sharing the same age group, income group, race and state. Then we create sub-datasets with calculated proportion of such combination of variables with respect to the group we are interested in. Table \@ref(tab:tab4) shows one of such sub-dataset for proportion with respect to age groups. For example, for the first row, the proportion variable means that the proportion of American Indian or Alaska Native living in Alabama with income between \$100,000 to \$174,999 at age above 70 is only 0.00025% of all people with age above 70.
+The distribution of the groups are similar to the Nationscape dataset, and the unequal distribution of frequency in each group still exist as expected. There still exist states that have significantly lower frequency comparing to larger states, the higher house income level groups still have lower frequency among the dataset. Chinese or Japanese and Alaska Native or American Indians still have a significantly lower share of the distribution comparing to the number of White people.
+
+However, this similar pattern is a good sign which indicate that our regression model trained on the Nationscape dataset would be appropriate to use on the ACS dataset. This similarity also indicates the reliability of both dataset in term of response quality. Since the distribution of variables though the two survey match, we have more reason to believe that the two survey captured the true population distributions in general.
+
+The next step is the post-stratification part of the MRP approach. The first step is to sum up all the observations in the dataset sharing the same age group, income group, race and state. Then we can create new datasets with calculated proportion of such combination of variables with respect to the specific variable we are interested in. Table \@ref(tab:tab4) shows one of such sub-dataset for proportion with respect to age groups. For example, for the first row, the proportion variable means that the proportion of American Indian or Alaska Native living in Alabama with income between \$100,000 to \$174,999 at age above 70 is only 0.00025% of all people with age above 70. This could also be done by calculating the proportion of that cell with respect to the whole ACS dataset samples, that will make the proportion be $n/sum(n)$. The former group wise proportion is useful when making predictions within each group, while the latter is useful when making a final prediction of proportion of Trump vote among all the samples in the ACS dataset.
 
 ```{r tab4, echo = FALSE, message = FALSE}
 kable(agegrp_p[1:6,],
       col.names = c("Age Group", "Race", "State", "Income Group", "Count", "Proportion"),
       align = "c", 
       caption = "Proportion with respect to Age")%>%
-  kable_styling(latex_options = c("hold_position","scale_down"))
+  kable_styling(latex_options = c("HOLD_position","scale_down"))
 
 ```
-
-
-
-
 
 # Model
 
 ```{r model, echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
 #due to the ability of my laptop, if I try adding more layers to other variables my laptop would fail to do so.....So I decided to only add layers on age group, states, and race.
 #Bayesian model with multi-leveling on age, income, race and state using the equation in this section
-model4 <- brm(Who ~ (1|agegrp) + (1|incgrp) + (1|statefull) + (1|race), 
+model8 <- brm(Who ~ (1|agegrp) + (1|incgrp) + (1|statefull) + (1|race), 
             data = sample_data, 
             family = bernoulli(),
+            control = list(adapt_delta = 0.98),
             #regression on vote for trump (binary)
             seed = 6431,
             #seed not perfect in brm, but better than nothing
             silent = TRUE,
             refresh = 0,
-            #the above option turns off all message completetly wehn knitting
-            file = "/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/outputs/model/model4")
-#file the model so it doesn't run everytime
-summary(model4)
+            #the above option turns off all message completely wen knitting
+            file = "/Users/jordans2000/Desktop/STA304/PS4-Election/US_election_Yi_Su/outputs/model/model8")
+#file the model so it doesn't run every time
+summary(model8)
 ```
+A multilevel logistic regression model was fitted on the modified ACS dataset using a Bayesian approach. The regression was done in `R` [@citeR] using the `brms` package [@citebrms] and `tidybayes` package [@citetidybayes]. We use a logistic regression since our response variable is a binary variable, with value 1 representing vote for Trump and 0 representing vote for Biden. Our explanatory variables are age groups, race, household income groups, and states. 
 
+The choice of age as a explanatory variable is based on modern history of the US. The US is one of the few countries that have experience of wars in the recent decades although they are not domestic wars. This experience of war is likely to influence individual's opinion about Trump, since the Nationscape dataset do not include veteran status, we use age groups instead and hoping that higher age groups may have higher proportions of veterans whether in the WWII or recent ones. The choice of household income and race are also based on some expected difference of opinions about Trump when they have different income level or race. Because of some recent event between races, we do expect a significantly less support rate for Trump among American Africans comparing to other races.
+
+However, these choice of explanatory variables are also due to limitation of hardware. Unfortunately, the regression needed to be run on local personal devices with poor CPU performance and limited amount of memory. Four categorical variables with an intercept for each is the maximum performance that the device could get after numerous attempts of more complex regressions. We made attempts including gender, labor force status, education and citizenship status. Most models are either successfully built but exceeding our device memory when making forecasts or it breaks when modeling on our device. The limitations result by this constraint will also be discussed in *Section 5.4*.
 
 \begin{equation}
-Pr(y_{i}=1) = logit^{-1}(\alpha^{age\,group}_{a[i]}+ \alpha^{income\,group}_{a[i]}+ \alpha^{race}_{a[i]}+ \alpha^{state}_{a[i]}) (\#eq:bayes)
+Pr(y_{i}=1) = logit^{-1}(\alpha^{age\,group}_{a[i]}+ \alpha^{income\,group}_{b[i]}+ \alpha^{race}_{c[i]}+ \alpha^{state}_{d[i]}) (\#eq:bayes)
 \end{equation}
 
-Equation \@ref(eq:bayes)
+Equation \@ref(eq:bayes) displays the logistic regression model. Each $\alpha$ represent the age group, race, household income group and state respectively. And the subscripts $(a,b,c,d)[i]$ represent the specific sub-group that the $i^{th}$ individual belong to. For example, if we have $\alpha^{age\,group}_{Below\,20[j]}$, this means the individual j belong to the age group of below 20. However, the $(a,b,c,d)$ would be replaced with number 1 to K, for K be the number of total number of categorical groups in that variable.
 
+Each of the $\alpha$ are modeled as normally distributed with mean 0 and a variance which we set prior for. For example, the $\alpha$ for the age group variable would be modeled by:
+$$\alpha^{age\,group}_{a[i]}\sim {Normal}(0, \sigma_{age\,group})\,for\,a= 1,2,...,7$$
+
+Since we are using a Bayesian approach model, we could set prior distribution on the variance of these $\alpha$s. In this report, we use the default prior distribution of the `brms` package function `brm` which are student t distributions since have no better prior information to provide. 
+
+The `brms` package essentially bring the merit of `Stan` using simple `R` syntax and through similar algorithms like Markov chain Monte Carlo (MCMC). MCMC chains allow the model to develop the parameter gradually, 4 chains and 1000 iteration (not including warm up) were used to fit the model with the help of `brm` function in `brms`.  
+
+To ensure convergence of the regression, we modified the The former regression models with lower flexibility had 1-20 divergent transitions in the Bayesian set up, we increased the flexibility of the model by much to achieve total convergence among all transitions during the MCMC method. However, this does not solve the root issue that our model is potentially not a very good fit to the data. Ideally, we could achieve a better fit by adding more control variables in our regression. But as discussed above, the limitation that we had to run the regression locally on our personal devices restricted the degree of layers and explanatory variables we could add to the regression due to the poor performance of hardware.
+
+```{r trace, fig.cap = "Convergence of Model Parameters",echo = FALSE, message=FALSE, warning=FALSE,out.width="80%"}
+mcmc_plot(model8, type = "trace")
+
+```
+
+Figure \@ref(fig:trace) shows the trace plot of parameters for the final regression model we use. We successfully eliminated all divergent transitions during the chain, but the traces are still not quite ideal. 
 
 # Results
 
-```{r trace, fig.cap = "Convergence of Model Parameters",echo = FALSE, message=FALSE, warning=FALSE,out.width="80%"}
-mcmc_plot(model4, type = "trace")
-# set seed to the last 4 digits of my student number
-
-```
+## Resultant Regression Model
 
 ```{r naive, echo = FALSE, message = FALSE, warning = FALSE}
 counts <- counts%>%
   mutate(prop = n/sum(n))
 #create proportion that is to the whole population instead of group level
-fc <- model4 %>%
+fc <- model8 %>%
   predict(newdata = counts)
 #make predictions
 predictions <- merge(data.frame(counts, row.names=NULL), 
@@ -409,11 +438,11 @@ TrumpForecast <- sum((predictions$prop)*(predictions$Estimate))
 #overall forecast of the proportion of population that will vote for Trump
 ```
 
-
+##Forecast of overall support rate of Trump
 
 ```{r predictions, echo = FALSE, message = FALSE}
 #prediction for each age group
-pre_age <- model4 %>%
+pre_age <- model8 %>%
   add_predicted_draws(newdata=agegrp_p,
                       allow_new_levels=TRUE) %>%
   #create predictions
@@ -430,7 +459,7 @@ pre_age <- model4 %>%
   #return the mean of predict for each level of group(age, income, etc.)
   #the following chunk follows from the above code styles
 #prediction for each income group
-pre_inc <- model4 %>%
+pre_inc <- model8 %>%
   add_predicted_draws(newdata=incgrp_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -442,7 +471,7 @@ pre_inc <- model4 %>%
             lower = quantile(vote_predict, 0.025), 
             upper = quantile(vote_predict, 0.975))
 #prediction for each race
-pre_race <- model4 %>%
+pre_race <- model8 %>%
   add_predicted_draws(newdata=race_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -454,7 +483,7 @@ pre_race <- model4 %>%
             lower = quantile(vote_predict, 0.025), 
             upper = quantile(vote_predict, 0.975))
 #prediction for each states
-pre_state <- model4 %>%
+pre_state <- model8 %>%
   add_predicted_draws(newdata=state_p,
                       allow_new_levels=TRUE) %>%
   rename(vote_predict = .prediction) %>% 
@@ -484,7 +513,7 @@ pre_age %>%
   #make x-axis variable names non-overlapping
   ylab("Proportion voting for Trump") + 
   xlab("Age in 2018")
-#the estimated mean vote for trump between different age group
+#the estimated mean vote for trump  between different age group
 ```
 
 
@@ -518,6 +547,7 @@ pre_race %>%
 #the estimated mean vote for trump between different race group
 ```
 
+## Forecast Electoral Vote by Support Rate in Each State
 
 ```{r statep, fig.cap = "Forcasting Votes for Trump by States", echo = FALSE, message = FALSE, fig.show="hold", out.width="80%"}
 statebins(state_data = pre_state, 

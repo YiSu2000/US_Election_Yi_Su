@@ -1,8 +1,8 @@
 #### Preamble ####
-# Purpose: Prepare and clean the survey data downloaded from [...UPDATE ME!!!!!]
-# Author: Rohan Alexander and Sam Caetano [CHANGE THIS TO YOUR NAME!!!!]
+# Purpose: Prepare and clean the survey data downloaded from Democracy Fund and UCLA Nationscape dataset, requested from: 'https://www.voterstudygroup.org/publication/nationscape-data-set'.
+# Author: Yi Su
 # Data: 22 October 2020
-# Contact: rohan.alexander@utoronto.ca [PROBABLY CHANGE THIS ALSO!!!!]
+# Contact: jordan.su@mail.utoronto.ca 
 # License: MIT
 # Pre-requisites: 
 # - Need to have downloaded the data from X and save the folder that you're 
